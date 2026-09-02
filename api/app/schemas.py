@@ -34,7 +34,14 @@ class EditParams(BaseModel):
     guidance: Optional[float] = Field(default=None, ge=0, le=20)
     seed: Optional[int] = None
     output_format: Literal["png", "jpeg", "webp"] = "png"
-    enhance: bool = True  # run the prompt-engineering layer before FLUX
+    enhance: bool = True  # run the prompt-engineering layer before the editor
+    # Path selection:
+    #   auto      -> classify subject: graphic -> editor, photo -> composite
+    #   edit      -> force the regenerative editor (Qwen/FLUX)
+    #   composite -> force segment + generate-scene + place (exact pixels)
+    mode: Literal["auto", "edit", "composite"] = "auto"
+    # Legacy override, equivalent to mode="composite" when true.
+    composite: bool = False
 
 
 class JobCreated(BaseModel):
@@ -53,4 +60,6 @@ class JobStatus(BaseModel):
     result_format: Optional[str] = None
     # Prompt-engineering layer output (populated once the worker runs it)
     engineered_prompt: Optional[str] = None
-    engineered_by: Optional[str] = None  # llm | template | raw | disabled
+    engineered_by: Optional[str] = None  # vlm | llm | template | composite | disabled
+    # Which path ran and why (e.g. "auto:photo->composite", "forced:edit").
+    route: Optional[str] = None

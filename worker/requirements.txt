@@ -1,10 +1,17 @@
 # NOTE: torch / torchvision are installed separately in the Dockerfile from the
 # CUDA 13.0 aarch64 wheel index (Blackwell / GB10). Keep them out of here.
-diffusers==0.35.1
-transformers==4.49.0
+# Qwen-Image-Edit-2509 needs transformers>=4.5x for its Qwen2.5-VL text encoder;
+# 4.56.1 is the newest that still keeps huggingface_hub<1.0 (diffusers 0.36 compat).
+diffusers==0.36.0
+transformers==4.56.1
+tokenizers==0.22.2
 accelerate==1.4.0
 safetensors==0.4.5
 sentencepiece==0.2.0
+# Composite path: BiRefNet (segmentation) needs these; SDXL uses diffusers.
+timm==1.0.29
+einops==0.8.2
+kornia==0.8.3
 protobuf==5.29.3
 huggingface_hub==0.34.4
 pillow==11.1.0

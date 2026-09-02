@@ -19,11 +19,6 @@ ECOM_PRESETS: dict[str, dict] = {
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    # Model / diffusion defaults (surfaced to callers, executed by the worker)
-    model_id: str = "black-forest-labs/FLUX.1-Kontext-dev"
-    default_steps: int = 28
-    default_guidance: float = 2.5
-
     # Infra
     redis_url: str = "redis://redis:6379/0"
     data_dir: str = "/data"

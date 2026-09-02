@@ -32,7 +32,12 @@ OUT_MEDIA = {"png": "image/png", "jpeg": "image/jpeg", "webp": "image/webp"}
 
 app = FastAPI(
     title="Local Image Edit Service",
-    description="Nano-Banana-style instruction image editing, running locally on FLUX.1 Kontext.",
+    description=(
+        "Nano-Banana-style instruction image editing, running locally. Auto-routes "
+        "each image between a regenerative editor (Qwen-Image-Edit / FLUX Kontext) and "
+        "a segment-and-composite path (BiRefNet + SDXL) that preserves the subject's "
+        "exact pixels."
+    ),
     version="1.0.0",
 )
 
@@ -93,6 +98,8 @@ async def edit(
     seed: int | None = Form(None),
     output_format: str = Form("png"),
     enhance: bool = Form(True),
+    mode: str = Form("auto"),
+    composite: bool = Form(False),
 ) -> JobCreated:
     if image.content_type not in ALLOWED_TYPES:
         raise HTTPException(415, f"Unsupported image type: {image.content_type}")
@@ -100,6 +107,8 @@ async def edit(
         raise HTTPException(413, "Prompt too long")
     if output_format not in OUT_MEDIA:
         raise HTTPException(400, "output_format must be png, jpeg or webp")
+    if mode not in ("auto", "edit", "composite"):
+        raise HTTPException(400, "mode must be auto, edit or composite")
 
     body = await image.read()
     if len(body) == 0:
@@ -110,7 +119,7 @@ async def edit(
     plan = parse_prompt(prompt)
     params = EditParams(
         steps=steps, guidance=guidance, seed=seed,
-        output_format=output_format, enhance=enhance,
+        output_format=output_format, enhance=enhance, mode=mode, composite=composite,
     )
 
     job_id = new_job_id()

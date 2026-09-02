@@ -9,7 +9,8 @@ from functools import lru_cache
 import redis
 from PIL import Image
 
-from .enhancer import engineer_prompt
+from .composite import run_composite
+from .enhancer import engineer_prompt, route_decision
 from .pipeline import apply_resize, run_edit_model
 
 
@@ -59,24 +60,49 @@ def run_edit(job_id: str) -> None:
         image = Image.open(src_path)
         image.load()
 
-        # 0) Prompt-engineering layer: expand the terse instruction into a rich
-        #    Kontext instruction (LLM + template fallback). Recorded for the API.
+        # 1) The subject/scene edit. If the prompt carries an instruction, route
+        #    it (below) to the regenerative editor or the composite path; a
+        #    pure-resize prompt has no instruction and skips straight to step 2.
         instruction = (plan or {}).get("instruction")
         if instruction and instruction.strip():
-            if params.get("enhance", True):
-                engineered, source = engineer_prompt(instruction)
+            # Decide the path. Explicit mode/composite flag wins; otherwise
+            # "auto" is intent-aware: the vision model reads the image AND the
+            # instruction and picks the regenerative editor (integrate/install
+            # into a scene, or a flat graphic) vs. composite (keep exact pixels
+            # on a plain backdrop).
+            mode = (params.get("mode") or "auto").lower()
+            if params.get("composite") or mode == "composite":
+                use_composite, route = True, "forced:composite"
+            elif mode == "edit":
+                use_composite, route = False, "forced:edit"
             else:
-                engineered, source = instruction, "disabled"
-            r.hset(key, mapping={"engineered_prompt": engineered, "engineered_by": source})
+                decision = route_decision(instruction, image)
+                use_composite = decision == "composite"
+                route = f"auto:{decision}"
+            r.hset(key, "route", route)
 
-            # 1) Semantic edit via the diffusion model.
-            image = run_edit_model(
-                image.convert("RGB"),
-                engineered,
-                steps=params.get("steps") or _default_steps(),
-                guidance=params.get("guidance") or _default_guidance(),
-                seed=params.get("seed"),
-            )
+            if use_composite:
+                # Composite path: keep the subject's exact pixels, generate the
+                # scene around it. No diffusion editing of the subject.
+                image, bg_prompt = run_composite(
+                    image.convert("RGB"), instruction, seed=params.get("seed"),
+                )
+                r.hset(key, mapping={"engineered_prompt": bg_prompt, "engineered_by": "composite"})
+            else:
+                if params.get("enhance", True):
+                    engineered, source = engineer_prompt(instruction, image=image)
+                else:
+                    engineered, source = instruction, "disabled"
+                r.hset(key, mapping={"engineered_prompt": engineered, "engineered_by": source})
+
+                # Regenerative edit via the diffusion model.
+                image = run_edit_model(
+                    image.convert("RGB"),
+                    engineered,
+                    steps=params.get("steps") or _default_steps(),
+                    guidance=params.get("guidance") or _default_guidance(),
+                    seed=params.get("seed"),
+                )
 
         # 2) Deterministic resize (explicit dims or ecom preset).
         resize = (plan or {}).get("resize")

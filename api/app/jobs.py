@@ -96,6 +96,7 @@ def get_job(job_id: str) -> Optional[JobStatus]:
         result_format=data.get("result_format") or None,
         engineered_prompt=data.get("engineered_prompt") or None,
         engineered_by=data.get("engineered_by") or None,
+        route=data.get("route") or None,
     )
 
 

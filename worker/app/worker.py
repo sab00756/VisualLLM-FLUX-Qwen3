@@ -1,8 +1,10 @@
 """Worker entrypoint.
 
-Loads FLUX.1 Kontext once (warm model), publishes a heartbeat + readiness
-flag to Redis, then runs an RQ ``SimpleWorker`` (no fork -> model stays
-resident) that processes edit jobs one at a time.
+Loads the configured editor (Qwen-Image-Edit / FLUX Kontext) once as a warm
+model, publishes a heartbeat + readiness flag to Redis, then runs an RQ
+``SimpleWorker`` (no fork -> model stays resident) that processes edit jobs one
+at a time. The vision model and the composite-path models load lazily on first
+use.
 """
 from __future__ import annotations
 
@@ -38,7 +40,8 @@ def _preload() -> None:
     while True:
         attempts += 1
         try:
-            print("[worker] loading FLUX.1 Kontext (first run downloads weights)…", flush=True)
+            backend = os.environ.get("EDITOR_BACKEND", "flux").lower()
+            print(f"[worker] loading editor backend '{backend}' (first run downloads weights)…", flush=True)
             get_pipeline()
             print("[worker] model loaded — ready.", flush=True)
             return
@@ -46,8 +49,8 @@ def _preload() -> None:
             wait = min(60, 5 * attempts)
             print(
                 f"[worker] model load failed ({type(exc).__name__}: {exc}). "
-                f"Check HF_TOKEN and that the FLUX.1-Kontext-dev license is accepted. "
-                f"Retrying in {wait}s…",
+                f"For the 'flux' backend, check HF_TOKEN and that the "
+                f"FLUX.1-Kontext-dev license is accepted. Retrying in {wait}s…",
                 flush=True,
             )
             if attempts >= 5:

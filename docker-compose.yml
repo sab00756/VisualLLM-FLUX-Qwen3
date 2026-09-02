@@ -41,10 +41,15 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - DATA_DIR=/data
       - HF_HOME=/root/.cache/huggingface
+      # Editor backend (qwen | flux)
+      - EDITOR_BACKEND=${EDITOR_BACKEND:-qwen}
+      - QWEN_EDIT_MODEL_ID=${QWEN_EDIT_MODEL_ID:-Qwen/Qwen-Image-Edit-2509}
+      - QWEN_TRUE_CFG=${QWEN_TRUE_CFG:-4.0}
       # Prompt-engineering layer (LLM + template fallback)
       - ENHANCER_ENABLED=${ENHANCER_ENABLED:-true}
-      - ENHANCER_BACKEND=${ENHANCER_BACKEND:-local}
+      - ENHANCER_BACKEND=${ENHANCER_BACKEND:-vlm}
       - ENHANCER_LOCAL_MODEL=${ENHANCER_LOCAL_MODEL:-Qwen/Qwen2.5-7B-Instruct}
+      - ENHANCER_VLM_MODEL=${ENHANCER_VLM_MODEL:-Qwen/Qwen2.5-VL-7B-Instruct}
       - ENHANCER_BASE_URL=${ENHANCER_BASE_URL:-http://qwen-litellm:4000/v1}
       - ENHANCER_MODEL=${ENHANCER_MODEL:-qwen3-coder}
       - ENHANCER_API_KEY=${ENHANCER_API_KEY:-}

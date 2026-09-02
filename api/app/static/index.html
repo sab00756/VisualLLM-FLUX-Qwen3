@@ -11,7 +11,7 @@
   p.sub { color: #666; margin: 0 0 22px; font-size: 14px; }
   label { display: block; font-size: 13px; font-weight: 600; margin: 14px 0 5px; }
   input, textarea, button { font: inherit; }
-  input[type=text], input[type=password], textarea {
+  input[type=text], input[type=password], textarea, select {
     width: 100%; padding: 9px 11px; border: 1px solid #ccc; border-radius: 8px;
     background: #fff; box-sizing: border-box; }
   textarea { min-height: 70px; resize: vertical; }
@@ -29,13 +29,15 @@
     border-radius: 8px; font-size: 13px; color: #333; }
   #engineered .lab { font-weight: 600; color: #2563eb; font-size: 11px; text-transform: uppercase;
     letter-spacing: .04em; display: block; margin-bottom: 3px; }
+  #engineered .route { display: inline-block; margin-top: 8px; padding: 2px 8px; border-radius: 999px;
+    background: #e0e7ff; color: #3730a3; font-size: 11px; font-weight: 600; }
   .hidden { display: none; }
   .hint { font-size: 12px; color: #999; font-weight: 400; }
 </style>
 </head>
 <body>
   <h1>Image Editor</h1>
-  <p class="sub">Upload an image, describe the change. Runs locally on FLUX.1 Kontext.</p>
+  <p class="sub">Upload an image, describe the change. Runs locally — Qwen-Image-Edit for edits, a segment-and-composite path for real product photos, auto-selected per image.</p>
 
   <div id="keyWrap" class="hidden">
     <label>API key <span class="hint">— required to use this service</span></label>
@@ -53,6 +55,14 @@
     <div><label>Seed <span class="hint">(opt)</span></label><input type="text" id="seed" placeholder="random" /></div>
     <div><label>Format</label><input type="text" id="fmt" placeholder="png" /></div>
   </div>
+
+  <label>Mode</label>
+  <select id="mode">
+    <option value="auto">Auto — pick the best path from your prompt + image (recommended)</option>
+    <option value="edit">Edit — regenerate / integrate into a scene</option>
+    <option value="composite">Composite — keep exact pixels on a plain backdrop</option>
+  </select>
+  <span class="hint">Auto reads your intent: "install / place naturally in a scene" → editor; "keep it exact on a plain background" → composite.</span>
 
   <label style="font-weight:400;display:flex;align-items:center;gap:8px;margin-top:14px;">
     <input type="checkbox" id="enhance" checked style="width:auto;" />
@@ -100,6 +110,7 @@ $("go").onclick = async () => {
   if ($("seed").value.trim()) fd.append("seed", $("seed").value.trim());
   fd.append("output_format", $("fmt").value.trim() || "png");
   fd.append("enhance", $("enhance").checked ? "true" : "false");
+  fd.append("mode", $("mode").value);
   $("engineered").classList.add("hidden");
 
   try {
@@ -120,11 +131,23 @@ async function poll(jobId, t0) {
     if (r.status === 401) throw new Error("Invalid API key.");
     const j = await r.json();
     const secs = Math.round((Date.now() - t0) / 1000);
-    if (j.engineered_prompt) {
-      const by = j.engineered_by === "llm" ? "AI-engineered prompt"
-               : j.engineered_by === "template" ? "engineered prompt" : "prompt used";
-      $("engineered").innerHTML = '<span class="lab">' + by + '</span>' +
-        j.engineered_prompt.replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+    if (j.engineered_prompt || j.route) {
+      const esc = s => (s || "").replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+      const byLabel = {
+        vlm: "Vision-grounded prompt", llm: "AI-engineered prompt",
+        template: "Engineered prompt", composite: "Background scene prompt",
+        disabled: "Prompt used", raw: "Prompt used",
+      }[j.engineered_by] || "Prompt used";
+      const routeLabel = {
+        "auto:edit": "Auto → editor (integrate into scene)",
+        "auto:composite": "Auto → composite (keep exact pixels)",
+        "forced:edit": "Editor (forced)",
+        "forced:composite": "Composite (forced)",
+      }[j.route] || j.route;
+      let html = "";
+      if (j.engineered_prompt) html += '<span class="lab">' + byLabel + '</span>' + esc(j.engineered_prompt);
+      if (routeLabel) html += '<div><span class="route">' + esc(routeLabel) + '</span></div>';
+      $("engineered").innerHTML = html;
       $("engineered").classList.remove("hidden");
     }
     if (j.status === "done") {
