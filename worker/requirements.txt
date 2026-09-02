@@ -1,0 +1,12 @@
+# NOTE: torch / torchvision are installed separately in the Dockerfile from the
+# CUDA 13.0 aarch64 wheel index (Blackwell / GB10). Keep them out of here.
+diffusers==0.35.1
+transformers==4.49.0
+accelerate==1.4.0
+safetensors==0.4.5
+sentencepiece==0.2.0
+protobuf==5.29.3
+huggingface_hub==0.34.4
+pillow==11.1.0
+redis==5.2.1
+rq==2.1.0

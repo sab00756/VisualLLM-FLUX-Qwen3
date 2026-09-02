@@ -1,0 +1,80 @@
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--save", "60", "1", "--appendonly", "no"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  api:
+    build:
+      context: ./api
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - DATA_DIR=/data
+    ports:
+      - "${API_PORT:-8000}:8000"
+    volumes:
+      - data:/data
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/healthz').status==200 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  worker:
+    build:
+      context: ./worker
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - DATA_DIR=/data
+      - HF_HOME=/root/.cache/huggingface
+      # Prompt-engineering layer (LLM + template fallback)
+      - ENHANCER_ENABLED=${ENHANCER_ENABLED:-true}
+      - ENHANCER_BACKEND=${ENHANCER_BACKEND:-local}
+      - ENHANCER_LOCAL_MODEL=${ENHANCER_LOCAL_MODEL:-Qwen/Qwen2.5-7B-Instruct}
+      - ENHANCER_BASE_URL=${ENHANCER_BASE_URL:-http://qwen-litellm:4000/v1}
+      - ENHANCER_MODEL=${ENHANCER_MODEL:-qwen3-coder}
+      - ENHANCER_API_KEY=${ENHANCER_API_KEY:-}
+    volumes:
+      - data:/data
+      - hf-cache:/root/.cache/huggingface
+    networks:
+      - default
+      - qwennet
+    depends_on:
+      redis:
+        condition: service_healthy
+    # GPU passthrough (NVIDIA runtime)
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+volumes:
+  data:
+  hf-cache:
+  redis-data:
+
+networks:
+  default:
+  # The existing local LLM stack's network, so the worker can reach the
+  # OpenAI-compatible endpoint (qwen-litellm) for the prompt-engineering layer.
+  qwennet:
+    external: true
+    name: qwen3-coder-vlllm-opencode_default
